@@ -1,0 +1,42 @@
+name: Push image to dockerhub
+run-name: "[Push image to dockerhub] to ${{ github.event.inputs.environment }} by @${{ github.actor }}"
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "examples/grant_aws_permissions_in_github_action/**"
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: prepare
+        run: |
+          echo "WORKSPACE=./examples/grant_aws_permissions_in_github_action/app" >> $GITHUB_OUTPUT
+          echo "IMAGE_TAG=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+        id: prepare
+
+      - name: Check out source code
+        uses: actions/checkout@v4
+
+      - name: Login to Docker Hub
+        uses: docker/login-action@v2
+        with:
+          username: ${{ secrets.DOCKERHUB_ACCESS_TOKEN_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_ACCESS_TOKEN_SECRET }}
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and Push to Docker Hub
+        uses: docker/build-push-action@v4
+        with:
+          context: ${{ steps.prepare.outputs.WORKSPACE }}
+          file: ${{ steps.prepare.outputs.WORKSPACE }}/Dockerfile
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          push: true
+          tags: ccrayz/examples:${{ steps.prepare.outputs.IMAGE_TAG }}
+          platforms: linux/amd64

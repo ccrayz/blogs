@@ -1,0 +1,49 @@
+name: Push image to AWS ECR
+run-name: "[Push image to AWS ECR] to ${{ github.event.inputs.environment }} by @${{ github.actor }}"
+permissions:
+  id-token: write
+  contents: read
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - "examples/grant_aws_permissions_in_github_action/**"
+
+jobs:
+  ci:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Prepare
+        run: |
+          echo "WORKSPACE=./examples/grant_aws_permissions_in_github_action/app" >> $GITHUB_OUTPUT
+          echo "IMAGE_TAG=$(echo $GITHUB_SHA | cut -c1-7)" >> $GITHUB_OUTPUT
+        id: prepare
+
+      - name: Check out source code
+        uses: actions/checkout@v4
+      
+      - name: Configure AWS Credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: arn:aws:iam::${{ secrets.AWS_ACCOUNT_ID }}:role/github_action_role
+          aws-region: ap-northeast-2
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v2
+
+      - name: Build and Push to AWS ECR
+        uses: docker/build-push-action@v4
+        with:
+          context: ${{ steps.prepare.outputs.WORKSPACE }}
+          file: ${{ steps.prepare.outputs.WORKSPACE }}/Dockerfile
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          push: true
+          tags: ${{ secrets.AWS_ACCOUNT_ID }}.dkr.ecr.ap-northeast-2.amazonaws.com/example-ecr:${{ steps.prepare.outputs.IMAGE_TAG }}
+          platforms: linux/amd64
